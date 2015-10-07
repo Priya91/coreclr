@@ -691,12 +691,19 @@ static
 int
 PERFWriteCounters( pal_perf_api_info * table )
 {
-    char fileName[MAX_LONGPATH];
+    char * fileName = new char[MAX_LONGPATH];
     pal_perf_api_info * off;
     PERF_FILE * hFile;
     int i;
 
     off = table;
+    
+    if (fileName == NULL)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return -1;
+    }
+    
     PERFLogFileName(fileName, profile_summary_log_name, "_perf_summary.log", MAX_LONGPATH);
     hFile = PERF_FILEFN(fopen)(fileName, "a+");
     if(hFile != NULL)
@@ -789,7 +796,8 @@ PERFReadSetting(  )
     char * ptr;
     char function_name[PAL_PERF_MAX_FUNCTION_NAME];  //no function can be longer than 127 bytes.
 
-    char  file_name_buf[MAX_LONGPATH];  
+    char * file_name_buf;
+    PathCharString file_name_bufPS;
     char  * input_file_name; 
     char  * summary_flag_env;
     char  * nested_tracing_env;
@@ -906,15 +914,19 @@ PERFReadSetting(  )
         {
             if( PERFIsValidFile(perf_default_path,traced_apis_filename))
             {
-                if ((strcpy_s(file_name_buf, sizeof(file_name_buf), perf_default_path) != SAFECRT_SUCCESS) ||
-                    (strcat_s(file_name_buf, sizeof(file_name_buf), PATH_SEPARATOR) != SAFECRT_SUCCESS) ||
-                    (strcat_s(file_name_buf, sizeof(file_name_buf), traced_apis_filename) != SAFECRT_SUCCESS))
+                int length = strlen(perf_default_path) + strlen(PATH_SEPARATOR) + strlen(traced_apis_filename);
+                file_name_buf = file_name_bufPS.OpenStringBuffer(length);
+                if ((strcpy_s(file_name_buf, file_name_bufPS.GetSizeOf(), perf_default_path) != SAFECRT_SUCCESS) ||
+                    (strcat_s(file_name_buf, file_name_bufPS.GetSizeOf(), PATH_SEPARATOR) != SAFECRT_SUCCESS) ||
+                    (strcat_s(file_name_buf, file_name_bufPS.GetSizeOf(), traced_apis_filename) != SAFECRT_SUCCESS))
                 {
+                    file_name_bufPS.CloseBuffer(0);
                     ret = FALSE;
                     input_file_name = NULL;
                 }
                 else
                 {
+                    file_name_bufPS.CloseBuffer(length);
                     input_file_name = file_name_buf;
                 }
             }
@@ -1078,12 +1090,18 @@ BOOL
 PERFFlushLog(pal_perf_thread_info * local_info, BOOL output_header)
 {
     BOOL ret = FALSE;
-    char fileName[MAX_LONGPATH];
+    char * fileName = new char[MAX_LONGPATH];
     int nWrittenBytes = 0;
     PERF_FILE * hFile;
 
     if (summary_only)
         return TRUE;
+        
+    if (fileName == NULL)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        return FALSE;
+    }
 
     PERFLogFileName(fileName, profile_time_log_name, "_perf_time.log", MAX_LONGPATH);
 
@@ -1432,20 +1450,25 @@ char *
 PERFIsValidFile( const char * path, const char * file)
 {
     FILE * hFile;
-    char temp[MAX_LONGPATH];
+    char * temp;
+    PathCharString tempPS;
 
     if(file==NULL || strlen(file)==0) 
         return NULL;
 
 	if ( strcmp(path, "") )
-    {   
+    {
+        int length = strlen(path) + strlen(PATH_SEPARATOR) + strlen(file);
+        temp = tempPS.OpenStringBuffer(length);   
         if ((strcpy_s(temp, sizeof(temp), path) != SAFECRT_SUCCESS) ||
             (strcat_s(temp, sizeof(temp), PATH_SEPARATOR) != SAFECRT_SUCCESS) ||
             (strcat_s(temp, sizeof(temp), file) != SAFECRT_SUCCESS))
         {
+            tempPS.CloseBuffer(0);
             return NULL;
         }
 
+        tempPS.CloseBuffer(length);
         hFile = fopen(temp, "r");
     }
     else

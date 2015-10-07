@@ -26,6 +26,7 @@ Revision History:
 #include "pal/dbgmsg.h"
 #include "pal/file.h"
 #include "pal/malloc.hpp"
+#include "pal/stackstring.hpp"
 
 #include <errno.h>
 
@@ -194,7 +195,8 @@ GetFullPathNameW(
     LPSTR fileNameA;
     /* bufferA needs to be able to hold a path that's potentially as
        large as MAX_LONGPATH WCHARs. */
-    CHAR  bufferA[MAX_LONGPATH * sizeof(WCHAR)];
+    CHAR * bufferA;
+    size_t bufferASize = 0;
     LPSTR lpFilePartA;
     int   fileNameLength;
     int   srcSize;
@@ -212,6 +214,7 @@ GetFullPathNameW(
        to ANSI. This may be more than MAX_LONGPATH. We try to
        handle that case, since it may be less than MAX_LONGPATH
        WCHARs. */
+    
     fileNameLength = WideCharToMultiByte(CP_ACP, 0, lpFileName,
                                          -1, NULL, 0, NULL, NULL);
     if (fileNameLength == 0)
@@ -244,9 +247,17 @@ GetFullPathNameW(
         goto done;
     }
     
-    length = GetFullPathNameA(fileNameA, sizeof(bufferA), bufferA, &lpFilePartA);
+    bufferASize = MAX_LONGPATH * sizeof(WCHAR);
+    bufferA = (CHAR *)alloca(bufferASize);
+    if (bufferA == NULL)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        goto done;
+    }
     
-    if (length == 0 || length > sizeof(bufferA))
+    length = GetFullPathNameA(fileNameA, bufferASize, bufferA, &lpFilePartA);
+    
+    if (length == 0 || length > bufferASize)
     {
         /* Last error is set by GetFullPathNameA */
         nRet = length;
@@ -1087,8 +1098,10 @@ SearchPathA(
     )
 {
     DWORD nRet = 0;
-    CHAR FullPath[MAX_LONGPATH];
-    CHAR CanonicalFullPath[MAX_LONGPATH];
+    CHAR * FullPath;
+    size_t FullPathLength = 0;
+    PathCharString FullPathPS;
+    CHAR * CanonicalFullPath;
     LPCSTR pPathStart;
     LPCSTR pPathEnd;
     size_t PathLength;
@@ -1124,6 +1137,12 @@ SearchPathA(
     }
 
     FileNameLength = strlen(lpFileName);
+    CanonicalFullPath = (CHAR *)alloca(MAX_LONGPATH);
+    if (CanonicalFullPath == NULL)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        goto done;
+    }
 
     /* special case : if file name contains absolute path, don't search the 
        provided path */
@@ -1140,7 +1159,7 @@ SearchPathA(
         if (dw == 0 || dw >= MAX_LONGPATH) 
         {
             WARN("couldn't canonicalize path <%s>, error is %#x. failing.\n",
-                 FullPath, GetLastError());
+                 lpFileName, GetLastError());
             SetLastError(ERROR_INVALID_PARAMETER);
             goto done;
         }
@@ -1194,16 +1213,20 @@ SearchPathA(
     
             /* Construct a pathname by concatenating one path from lpPath, '/' 
                and lpFileName */
+            FullPathLength = PathLength + FileNameLength;
+            FullPath = FullPathPS.OpenStringBuffer(FullPathLength);
             memcpy(FullPath, pPathStart, PathLength);
             FullPath[PathLength] = '/';
             if (strcpy_s(&FullPath[PathLength+1], MAX_LONGPATH-PathLength, lpFileName) != SAFECRT_SUCCESS)
             {
+                FullPathPS.CloseBuffer(0);
                 ERROR("strcpy_s failed!\n");
                 SetLastError( ERROR_FILENAME_EXCED_RANGE );
                 nRet = 0;
                 goto done;
             }
 
+            FullPathPS.CloseBuffer(FullPathLength);            
             /* Canonicalize the path to deal with back-to-back '/', etc. */
             dw = GetFullPathNameA(FullPath, MAX_LONGPATH,
                                   CanonicalFullPath, NULL);
@@ -1305,14 +1328,19 @@ SearchPathW(
     )
 {
     DWORD nRet = 0;
-    WCHAR FullPath[MAX_LONGPATH];
+    WCHAR * FullPath;
+    size_t FullPathLength = 0;
+    PathWCharString FullPathPS;
     LPCWSTR pPathStart;
     LPCWSTR pPathEnd;
     size_t PathLength;
     size_t FileNameLength;
     DWORD dw;
-    char AnsiPath[MAX_LONGPATH];
-    WCHAR CanonicalPath[MAX_LONGPATH];
+    char * AnsiPath;
+    PathCharString AnsiPathPS;
+    size_t CanonicalPathLength;
+    int canonical_size;
+    WCHAR * CanonicalPath;
 
     PERF_ENTRY(SearchPathW);
     ENTRY("SearchPathW(lpPath=%p (%S), lpFileName=%p (%S), lpExtension=%p, "
@@ -1342,6 +1370,13 @@ SearchPathW(
         goto done;
     }          
 
+    CanonicalPath = (WCHAR *)alloca(MAX_LONGPATH);
+    if (CanonicalPath == NULL)
+    {
+        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
+        goto done;
+    }
+    
     /* special case : if file name contains absolute path, don't search the 
        provided path */
     if('\\' == lpFileName[0] || '/' == lpFileName[0])
@@ -1357,8 +1392,12 @@ SearchPathW(
         }
 
         /* see if the file exists */
-	WideCharToMultiByte(CP_ACP, 0, CanonicalPath, -1,
-			    AnsiPath, MAX_LONGPATH, NULL, NULL);
+        CanonicalPathLength = (PAL_wcslen(CanonicalPath)+1)*sizeof(WCHAR);
+        AnsiPath = AnsiPathPS.OpenStringBuffer(CanonicalPathLength);
+	    canonical_size = WideCharToMultiByte(CP_ACP, 0, CanonicalPath, -1,
+			    AnsiPath, CanonicalPathLength, NULL, NULL);
+	    AnsiPathPS.CloseBuffer(canonical_size);
+	    
         if(0 == access(AnsiPath, F_OK))
         {
             /* found it */
@@ -1409,9 +1448,13 @@ SearchPathW(
     
             /* Construct a pathname by concatenating one path from lpPath, '/' 
                and lpFileName */
+            FullPathLength = PathLength + FileNameLength;
+            FullPath = FullPathPS.OpenStringBuffer(FullPathLength);
             memcpy(FullPath, pPathStart, PathLength*sizeof(WCHAR));
             FullPath[PathLength] = '/';
             PAL_wcscpy(&FullPath[PathLength+1], lpFileName);
+            
+            FullPathPS.CloseBuffer(FullPathLength);
     
             /* Canonicalize the path to deal with back-to-back '/', etc. */
             dw = GetFullPathNameW(FullPath, MAX_LONGPATH,
@@ -1425,8 +1468,12 @@ SearchPathW(
             }
     
             /* see if the file exists */
-            WideCharToMultiByte(CP_ACP, 0, CanonicalPath, -1,
-                                AnsiPath, MAX_LONGPATH, NULL, NULL);
+            CanonicalPathLength = (PAL_wcslen(CanonicalPath)+1)*sizeof(WCHAR);
+            AnsiPath = AnsiPathPS.OpenStringBuffer(CanonicalPathLength);
+            canonical_size = WideCharToMultiByte(CP_ACP, 0, CanonicalPath, -1,
+                                AnsiPath, CanonicalPathLength, NULL, NULL);
+            AnsiPathPS.CloseBuffer(canonical_size);
+               
             if(0 == access(AnsiPath, F_OK))
             {
                 /* found it */

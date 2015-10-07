@@ -34,6 +34,7 @@ Abstract:
 #include "pal/misc.h"
 #include "pal/virtual.h"
 #include "pal/map.hpp"
+#include "pal/stackstring.hpp"
 
 #include <sys/param.h>
 #include <errno.h>
@@ -92,14 +93,15 @@ CRITICAL_SECTION module_critsec;
 MODSTRUCT exe_module; 
 MODSTRUCT *pal_module = NULL;
 
-char g_szCoreCLRPath[MAX_LONGPATH] = { 0 };
+char * g_szCoreCLRPath = new char[MAX_LONGPATH+1];
+size_t g_cbszCoreCLRPath = (MAX_LONGPATH+1) * sizeof(char);
 
 /* static function declarations ***********************************************/
 
 template<class TChar> bool LOADVerifyLibraryPath(const TChar *libraryPath);
 bool LOADConvertLibraryPathWideStringToMultibyteString(
     LPCWSTR wideLibraryPath,
-    CHAR (&multibyteLibraryPath)[MAX_LONGPATH],
+    LPSTR multibyteLibraryPath,
     INT *multibyteLibraryPathLengthRef);
 
 static BOOL LOADValidateModule(MODSTRUCT *module);
@@ -220,7 +222,7 @@ LoadLibraryExW(
         return NULL;
     }
     
-    CHAR lpstr[MAX_LONGPATH];
+    CHAR * lpstr = NULL;
     INT name_length;
     HMODULE hModule = NULL;
 
@@ -264,7 +266,7 @@ PALAPI
 PAL_LoadLibraryDirect(
     IN LPCWSTR lpLibFileName)
 {
-    CHAR lpstr[MAX_LONGPATH];
+    CHAR * lpstr = NULL;
     INT name_length;
     HMODULE hModule = NULL;
 
@@ -309,7 +311,7 @@ PAL_RegisterLibraryDirect(
     IN HMODULE dl_handle,
     IN LPCWSTR lpLibFileName)
 {
-    CHAR lpstr[MAX_LONGPATH];
+    CHAR * lpstr = NULL;
     INT name_length;
     HMODULE hModule = NULL;
 
@@ -1237,14 +1239,19 @@ bool LOADVerifyLibraryPath(const TChar *libraryPath)
 // Converts the wide char library path string into a multibyte-char string. On error, calls SetLastError() and returns false.
 bool LOADConvertLibraryPathWideStringToMultibyteString(
     LPCWSTR wideLibraryPath,
-    CHAR(&multibyteLibraryPath)[MAX_LONGPATH],
+    LPSTR multibyteLibraryPath,
     INT *multibyteLibraryPathLengthRef)
 {
     _ASSERTE(wideLibraryPath != nullptr);
     _ASSERTE(multibyteLibraryPathLengthRef != nullptr);
 
+    PathCharString tempPS;
+    size_t length = (PAL_wcslen(wideLibraryPath)+1) * sizeof(WCHAR);
+    multibyteLibraryPath = tempPS.OpenStringBuffer(length);
     *multibyteLibraryPathLengthRef = WideCharToMultiByte(CP_ACP, 0, wideLibraryPath, -1, multibyteLibraryPath,
-                                                         MAX_LONGPATH, nullptr, nullptr);
+                                                         length, nullptr, nullptr);
+    tempPS.CloseBuffer(*multibyteLibraryPathLengthRef);
+    
     if (*multibyteLibraryPathLengthRef == 0)
     {
         DWORD dwLastError = GetLastError();
@@ -1596,7 +1603,8 @@ Return value :
 --*/
 static HMODULE LOADLoadLibrary(LPCSTR shortAsciiName, BOOL fDynamic)
 {
-    CHAR fullLibraryName[MAX_LONGPATH];
+    CHAR * fullLibraryName;
+    PathCharString fullLibraryNamePS;
     HMODULE module = NULL;
     HMODULE dl_handle = NULL;
 
@@ -1642,7 +1650,10 @@ static HMODULE LOADLoadLibrary(LPCSTR shortAsciiName, BOOL fDynamic)
                 continue;
 
             _ASSERTE(dl_handle == nullptr);
-            if (snprintf(fullLibraryName, MAX_LONGPATH, formatStrings[i], PAL_SHLIB_PREFIX, shortAsciiName, PAL_SHLIB_SUFFIX) < MAX_LONGPATH)
+            fullLibraryName = fullLibraryNamePS.OpenStringBuffer(strlen(PAL_SHLIB_PREFIX)+strlen(shortAsciiName)+strlen(PAL_SHLIB_SUFFIX));
+            int size = snprintf(fullLibraryName, MAX_LONGPATH, formatStrings[i], PAL_SHLIB_PREFIX, shortAsciiName, PAL_SHLIB_SUFFIX);
+            fullLibraryNamePS.CloseBuffer(size);
+            if (size < MAX_LONGPATH)
             {
                 dl_handle = LOADLoadLibraryDirect(fullLibraryName, false /* setLastError */);
                 if (dl_handle != nullptr)
@@ -1910,7 +1921,7 @@ MODSTRUCT *LOADGetPalLibrary()
         }
         // Stash a copy of the CoreCLR installation path in a global variable.
         // Make sure it's terminated with a slash.
-        if (strcpy_s(g_szCoreCLRPath, sizeof(g_szCoreCLRPath), info.dli_fname) != SAFECRT_SUCCESS)
+        if (strcpy_s(g_szCoreCLRPath, g_cbszCoreCLRPath, info.dli_fname) != SAFECRT_SUCCESS)
         {
             ERROR("LOADGetPalLibrary: strcpy_s failed!");
             goto exit;
