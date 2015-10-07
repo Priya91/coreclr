@@ -5,6 +5,7 @@
 #define __STACKSTRING_H_
 
 #include "pal/malloc.hpp"
+#include <type_traits>
 
 template <SIZE_T STACKCOUNT, class T>
 class StackString
@@ -16,7 +17,14 @@ private:
 
     void NullTerminate()
     {
-        m_buffer[m_count] = W('\0');
+        if (std::is_same<T, CHAR>::value)
+        {
+            m_buffer[m_count] = '\0';
+        }
+        else
+        {
+            m_buffer[m_count] = W('\0');
+        }
     }
 
     void DeleteBuffer()
@@ -105,9 +113,14 @@ public:
         return Set(s.m_buffer, s.m_count);
     }
 
-    SIZE_T Getcount() const
+    SIZE_T GetCount() const
     {
         return m_count;
+    }
+    
+    SIZE_T GetSizeOf() const
+    {
+        return (m_count+1) * sizeof(T);
     }
 
     CONST T * GetString() const

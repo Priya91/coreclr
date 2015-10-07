@@ -24,6 +24,7 @@ Revision History:
 #include "pal/palinternal.h"
 #include "pal/dbgmsg.h"
 #include "pal/file.h"
+#include "pal/stackstring.hpp"
 
 #include <sys/param.h>
 #if !defined(_AIX)
@@ -68,7 +69,10 @@ GetDiskFreeSpaceW(
     pal_statfs fsInfoBuffer;
     INT  statfsRetVal = 0;
     DWORD dwLastError = NO_ERROR;
-    CHAR DirNameBuffer[ MAX_LONGPATH ];
+    PathCharString DirNameBufferPathString;
+    size_t length;
+    char * DirNameBuffer;
+    int size;
 
     PERF_ENTRY(GetDiskFreeSpaceW);
     ENTRY( "GetDiskFreeSpaceW( lpDirectoryName=%p (%S), lpSectorsPerCluster=%p,"
@@ -111,8 +115,12 @@ GetDiskFreeSpaceW(
 
     if ( lpDirectoryName )
     {
-        if ( WideCharToMultiByte( CP_ACP, 0, lpDirectoryName, -1,
-                                  DirNameBuffer,MAX_LONGPATH, 0, 0 ) != 0 )
+        length = PAL_wcslen(lpDirectoryName);
+        DirNameBuffer = DirNameBufferPathString.OpenStringBuffer(length);
+        size = WideCharToMultiByte( CP_ACP, 0, lpDirectoryName, -1,
+                                  DirNameBuffer,length+1, 0, 0 );
+        DirNameBufferPathString.CloseBuffer(size);
+        if ( size != 0 )
         {
             FILEDosToUnixPathA( DirNameBuffer );
             statfsRetVal = statfs( DirNameBuffer, &fsInfoBuffer );
