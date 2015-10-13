@@ -3213,7 +3213,7 @@ getFileName(
     char * lpFileName;
     PathCharString lpFileNamePS;
     char *lpTemp;
-    
+
     if (lpApplicationName)
     {
         int path_size = MAX_LONGPATH;
@@ -3300,7 +3300,6 @@ getFileName(
         if (!(size = WideCharToMultiByte(CP_ACP, 0, lpCommandLine, -1,
                                  lpFileName, length, NULL, NULL)))
         {
-            lpFileNamePS.CloseBuffer(size);
             ASSERT("WideCharToMultiByte failure\n");
             return FALSE;
         }

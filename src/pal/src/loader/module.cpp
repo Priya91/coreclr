@@ -93,7 +93,7 @@ CRITICAL_SECTION module_critsec;
 MODSTRUCT exe_module; 
 MODSTRUCT *pal_module = NULL;
 
-char * g_szCoreCLRPath = new char[MAX_LONGPATH+1];
+char * g_szCoreCLRPath = NULL;
 size_t g_cbszCoreCLRPath = (MAX_LONGPATH+1) * sizeof(char);
 
 /* static function declarations ***********************************************/
@@ -101,7 +101,7 @@ size_t g_cbszCoreCLRPath = (MAX_LONGPATH+1) * sizeof(char);
 template<class TChar> bool LOADVerifyLibraryPath(const TChar *libraryPath);
 bool LOADConvertLibraryPathWideStringToMultibyteString(
     LPCWSTR wideLibraryPath,
-    LPSTR multibyteLibraryPath,
+    OUT LPSTR multibyteLibraryPath,
     INT *multibyteLibraryPathLengthRef);
 
 static BOOL LOADValidateModule(MODSTRUCT *module);
@@ -1239,7 +1239,7 @@ bool LOADVerifyLibraryPath(const TChar *libraryPath)
 // Converts the wide char library path string into a multibyte-char string. On error, calls SetLastError() and returns false.
 bool LOADConvertLibraryPathWideStringToMultibyteString(
     LPCWSTR wideLibraryPath,
-    LPSTR multibyteLibraryPath,
+    OUT LPSTR multibyteLibraryPath,
     INT *multibyteLibraryPathLengthRef)
 {
     _ASSERTE(wideLibraryPath != nullptr);
@@ -1651,10 +1651,10 @@ static HMODULE LOADLoadLibrary(LPCSTR shortAsciiName, BOOL fDynamic)
 
             _ASSERTE(dl_handle == nullptr);
             fullLibraryName = fullLibraryNamePS.OpenStringBuffer(strlen(PAL_SHLIB_PREFIX)+strlen(shortAsciiName)+strlen(PAL_SHLIB_SUFFIX));
-            int size = snprintf(fullLibraryName, MAX_LONGPATH, formatStrings[i], PAL_SHLIB_PREFIX, shortAsciiName, PAL_SHLIB_SUFFIX);
-            fullLibraryNamePS.CloseBuffer(size);
-            if (size < MAX_LONGPATH)
+            int size = snprintf(fullLibraryName, fullLibraryNamePS.GetSizeOf(), formatStrings[i], PAL_SHLIB_PREFIX, shortAsciiName, PAL_SHLIB_SUFFIX);
+            if (size < fullLibraryNamePS.GetSizeOf())
             {
+                fullLibraryNamePS.CloseBuffer(size);
                 dl_handle = LOADLoadLibraryDirect(fullLibraryName, false /* setLastError */);
                 if (dl_handle != nullptr)
                 {
@@ -1921,6 +1921,11 @@ MODSTRUCT *LOADGetPalLibrary()
         }
         // Stash a copy of the CoreCLR installation path in a global variable.
         // Make sure it's terminated with a slash.
+        if (g_szCoreCLRPath == NULL)
+        {
+            g_szCoreCLRPath = new char[g_cbszCoreCLRPath/sizeof(char)];
+        }
+        
         if (strcpy_s(g_szCoreCLRPath, g_cbszCoreCLRPath, info.dli_fname) != SAFECRT_SUCCESS)
         {
             ERROR("LOADGetPalLibrary: strcpy_s failed!");

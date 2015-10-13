@@ -45,6 +45,8 @@ using namespace CorUnix;
 
 SET_DEFAULT_DEBUG_CHANNEL(FILE);
 
+int MaxWCharToAcpLengthRatio = 3;
+
 PAL_ERROR
 InternalSetFilePointerForUnixFd(
     int iUnixFd,
@@ -993,7 +995,7 @@ CreateFileW(
 
     if (lpFileName != NULL)
     {
-        length = (PAL_wcslen(lpFileName)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpFileName)+1) * MaxWCharToAcpLengthRatio;
     }
     
     name = namePathString.OpenStringBuffer(length);
@@ -1081,7 +1083,7 @@ CopyFileW(
     pThread = InternalGetCurrentThread();
     if (lpExistingFileName != NULL)
     {
-        length = (PAL_wcslen(lpExistingFileName)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpExistingFileName)+1) * MaxWCharToAcpLengthRatio;
     }
     
     source = sourcePathString.OpenStringBuffer(length);
@@ -1108,7 +1110,7 @@ CopyFileW(
     length = 0;
     if (lpNewFileName != NULL)
     {
-        length = (PAL_wcslen(lpNewFileName)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpNewFileName)+1) * MaxWCharToAcpLengthRatio;
     }
     
     dest = destPathString.OpenStringBuffer(length);
@@ -1290,7 +1292,7 @@ DeleteFileW(
     
     if (lpFileName != NULL)
     {
-        length = (PAL_wcslen(lpFileName)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpFileName)+1) * MaxWCharToAcpLengthRatio;
     }
     
     name = namePS.OpenStringBuffer(length);
@@ -1601,7 +1603,7 @@ MoveFileExW(
     
     if (lpExistingFileName != NULL)
     {
-        length = (PAL_wcslen(lpExistingFileName)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpExistingFileName)+1) * MaxWCharToAcpLengthRatio;
     }
     
     source = sourcePS.OpenStringBuffer(length);
@@ -1627,7 +1629,7 @@ MoveFileExW(
     length = 0;
     if (lpNewFileName != NULL)
     {
-        length = (PAL_wcslen(lpNewFileName)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpNewFileName)+1) * MaxWCharToAcpLengthRatio;
     }
     
     dest = destPS.OpenStringBuffer(length);
@@ -1798,7 +1800,7 @@ GetFileAttributesW(
         goto done;
     }
     
-    length = (PAL_wcslen(lpFileName)+1) * sizeof(WCHAR);
+    length = (PAL_wcslen(lpFileName)+1) * MaxWCharToAcpLengthRatio;
     filename = filenamePS.OpenStringBuffer(length);
     size = WideCharToMultiByte( CP_ACP, 0, lpFileName, -1, filename, length,
                                 NULL, NULL );
@@ -1878,7 +1880,7 @@ GetFileAttributesExW(
         goto done;
     }
     
-    length = (PAL_wcslen(lpFileName)+1) * sizeof(WCHAR);
+    length = (PAL_wcslen(lpFileName)+1) * MaxWCharToAcpLengthRatio;
     name = namePS.OpenStringBuffer(length);
     size = WideCharToMultiByte( CP_ACP, 0, lpFileName, -1, name, length,
                                 NULL, NULL );
@@ -1983,7 +1985,7 @@ SetFileAttributesW(
         goto done;
     }
     
-    length = (PAL_wcslen(lpFileName)+1) * sizeof(WCHAR);
+    length = (PAL_wcslen(lpFileName)+1) * MaxWCharToAcpLengthRatio;
     name = namePS.OpenStringBuffer(length);
     size = WideCharToMultiByte( CP_ACP, 0, lpFileName, -1, name, length,
                                 NULL, NULL );
@@ -3671,7 +3673,7 @@ GetTempFileNameW(
         goto done;
     }
 
-    length = (PAL_wcslen(lpPathName)+1) * sizeof(WCHAR);
+    length = (PAL_wcslen(lpPathName)+1) * MaxWCharToAcpLengthRatio;
     full_name = full_namePS.OpenStringBuffer(length);
     path_size = WideCharToMultiByte( CP_ACP, 0, lpPathName, -1, full_name,
                                      length, NULL, NULL );
@@ -3696,7 +3698,7 @@ GetTempFileNameW(
     
     if (lpPrefixString != NULL) 
     {
-        length = (PAL_wcslen(lpPrefixString)+1) * sizeof(WCHAR);
+        length = (PAL_wcslen(lpPrefixString)+1) * MaxWCharToAcpLengthRatio;
         prefix_string = prefix_stringPS.OpenStringBuffer(length);
         prefix_size = WideCharToMultiByte( CP_ACP, 0, lpPrefixString, -1, 
                                            prefix_string,
@@ -3722,7 +3724,7 @@ GetTempFileNameW(
         }
     }
     
-    tempfile_name = (CHAR *)alloca((MAX_LONGPATH+1) * sizeof(CHAR));
+    tempfile_name = new char[MAX_LONGPATH+1];
     if (tempfile_name == NULL)
     {
         pThread->SetLastError(ERROR_NOT_ENOUGH_MEMORY);
@@ -3733,9 +3735,13 @@ GetTempFileNameW(
     uRet = GetTempFileNameA(full_name, 
                             (lpPrefixString == NULL) ? NULL : prefix_string,
                             0, tempfile_name);
-        
-    if ( uRet && !MultiByteToWideChar( CP_ACP, 0, tempfile_name, -1, 
-                                       lpTempFileName, MAX_LONGPATH ))
+                        
+    path_size = MultiByteToWideChar( CP_ACP, 0, tempfile_name, -1, 
+                                       lpTempFileName, MAX_LONGPATH );
+
+    delete [] tempfile_name;
+    tempfile_name = NULL;
+    if ( uRet && !path_size)
     {
         DWORD dwLastError = GetLastError();
         if (dwLastError == ERROR_INSUFFICIENT_BUFFER)
@@ -3752,6 +3758,7 @@ GetTempFileNameW(
         uRet = 0;
         goto done;
     }
+    
 
 done:
     LOGEXIT("GetTempFileNameW returns UINT %u\n", uRet);
@@ -4897,7 +4904,7 @@ Return value:
 BOOL FILEGetFileNameFromSymLink(char *source)
 {
     int ret;
-    char * sLinkData = (char *)alloca((MAX_LONGPATH+1) * sizeof(char));
+    char * sLinkData = new char[MAX_LONGPATH+1];
 
     do
     {
@@ -4909,6 +4916,7 @@ BOOL FILEGetFileNameFromSymLink(char *source)
         }
     } while (ret > 0);
 
+    delete [] sLinkData;
     return (errno == EINVAL);
 }
 

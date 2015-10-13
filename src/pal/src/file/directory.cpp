@@ -264,7 +264,7 @@ RemoveDirectoryW(
         goto done;
     }
 
-    length = (PAL_wcslen(lpPathName)+1) * sizeof(WCHAR);
+    length = (PAL_wcslen(lpPathName)+1) * 3;
     mb_dir = mb_dirPathString.OpenStringBuffer(length);
     mb_size = WideCharToMultiByte( CP_ACP, 0, lpPathName, -1, mb_dir, length,
                                    NULL, NULL );
@@ -461,7 +461,7 @@ SetCurrentDirectoryW(
         goto done;
     }
 
-    length = (PAL_wcslen(lpPathName)+1) * sizeof(WCHAR);
+    length = (PAL_wcslen(lpPathName)+1) * 3;
     dir = dirPathString.OpenStringBuffer(length);
     size = WideCharToMultiByte( CP_ACP, 0, lpPathName, -1, dir, length,
                                 NULL, NULL );

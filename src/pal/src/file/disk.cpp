@@ -69,9 +69,9 @@ GetDiskFreeSpaceW(
     pal_statfs fsInfoBuffer;
     INT  statfsRetVal = 0;
     DWORD dwLastError = NO_ERROR;
-    PathCharString DirNameBufferPathString;
+    PathCharString dirNameBufferPathString;
     size_t length;
-    char * DirNameBuffer;
+    char * dirNameBuffer;
     int size;
 
     PERF_ENTRY(GetDiskFreeSpaceW);
@@ -115,15 +115,15 @@ GetDiskFreeSpaceW(
 
     if ( lpDirectoryName )
     {
-        length = (PAL_wcslen(lpDirectoryName)+1) * sizeof(WCHAR);
-        DirNameBuffer = DirNameBufferPathString.OpenStringBuffer(length);
+        length = (PAL_wcslen(lpDirectoryName)+1) * 3;
+        dirNameBuffer = dirNameBufferPathString.OpenStringBuffer(length);
         size = WideCharToMultiByte( CP_ACP, 0, lpDirectoryName, -1,
-                                  DirNameBuffer,length, 0, 0 );
-        DirNameBufferPathString.CloseBuffer(size);
+                                  dirNameBuffer,length, 0, 0 );
+        dirNameBufferPathString.CloseBuffer(size);
         if ( size != 0 )
         {
-            FILEDosToUnixPathA( DirNameBuffer );
-            statfsRetVal = statfs( DirNameBuffer, &fsInfoBuffer );
+            FILEDosToUnixPathA( dirNameBuffer );
+            statfsRetVal = statfs( dirNameBuffer, &fsInfoBuffer );
         }
         else
         {
@@ -147,7 +147,7 @@ GetDiskFreeSpaceW(
     {
         if ( errno == ENOTDIR || errno == ENOENT )
         {
-            FILEGetProperNotFoundError( DirNameBuffer, &dwLastError );
+            FILEGetProperNotFoundError( dirNameBuffer, &dwLastError );
             goto exit;
         }
         dwLastError = FILEGetLastErrorFromErrno();

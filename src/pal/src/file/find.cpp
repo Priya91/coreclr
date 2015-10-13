@@ -798,9 +798,9 @@ static int FILEGlobFromSplitPath( CPalThread *pthrCurrent,
 
     /* special handling is needed to handle the case where
         filename contains '[' and ']' */
-    EscapedPattern = EscapedPatternPS.OpenStringBuffer(length);
+    EscapedPattern = EscapedPatternPS.OpenStringBuffer(length*2);
     FILEEscapeSquareBrackets( Pattern, EscapedPattern);
-    EscapedPatternPS.CloseBuffer(length);
+    EscapedPatternPS.CloseBuffer(strlen(EscapedPattern));
 #ifdef GLOB_QUOTE
     flags |= GLOB_QUOTE;
 #endif  // GLOB_QUOTE

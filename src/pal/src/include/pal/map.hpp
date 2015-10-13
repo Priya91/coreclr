@@ -144,20 +144,11 @@ namespace CorUnix
     class CFileMappingImmutableData
     {
     public:
-        CHAR * szFileName = new CHAR[MAX_LONGPATH+1];
-        size_t cbszFileName = (MAX_LONGPATH+1) * sizeof(CHAR);
+        LPSTR szFileName;
         UINT MaxSize;               // The max size of the file mapping object
         DWORD flProtect;            // Protection desired for the file view
         BOOL bPALCreatedTempFile;   // TRUE if it's a PAL created file
         DWORD dwDesiredAccessWhenOpened;  // FILE_MAP_WRITE etc
-        ~CFileMappingImmutableData()
-        {
-            if (szFileName != NULL)
-            {
-                delete [] szFileName;   
-                szFileName = NULL;
-            }
-        }
     };
 
     class CFileMappingProcessLocalData 

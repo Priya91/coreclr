@@ -968,6 +968,7 @@ PALAPI
 PAL_BindResources(IN LPCSTR lpDomain)
 {
 #ifndef __APPLE__
+    _ASSERTE(g_szCoreCLRPath != NULL);
     char * coreCLRDirectoryPath;
     PathCharString coreCLRDirectoryPathPS;
     int len = strlen(g_szCoreCLRPath);

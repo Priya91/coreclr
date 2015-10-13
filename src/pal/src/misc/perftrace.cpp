@@ -132,7 +132,7 @@ static double PERFComputeStandardDeviation(pal_perf_api_info *api);
 static void PERFPrintProgramHeaderInfo(PERF_FILE * hFile, BOOL completedExecution);
 static BOOL PERFInitProgramInfo(LPWSTR command_line, LPWSTR exe_path);
 static BOOL PERFReadSetting( );
-static void PERFLogFileName(char *destFileName, const char *fileName, const char *suffix, int max_length);
+static void PERFLogFileName(PathCharString destFileString, const char *fileName, const char *suffix, int max_length);
 static void PERFlushAllLogs();
 static int PERFWriteCounters(pal_perf_api_info * table); 
 static BOOL PERFFlushLog(pal_perf_thread_info * local_buffer, BOOL output_header);
@@ -670,9 +670,10 @@ PERFlushAllLogs( )
 
 static
 void
-PERFLogFileName(char *destFileName, const char *fileName, const char *suffix, int max_length)
+PERFLogFileName(PathCharString * destFileString, const char *fileName, const char *suffix, int max_length)
 {
     const char *dir_path;
+    char * destFileName = new char[max_length];
     dir_path = (profile_log_path == NULL) ? "." : profile_log_path;
 
     if (fileName != NULL)
@@ -684,27 +685,24 @@ PERFLogFileName(char *destFileName, const char *fileName, const char *suffix, in
         snprintf(destFileName, max_length, "%s%s%d_%d%s", dir_path, PATH_SEPARATOR,
             program_info.process_id, THREADSilentGetCurrentThreadId(), suffix);
     }
-
+    
+    destFileString.Set(destFileName);
+    delete [] destFileName;
+    destFileName = NULL;
 }
 
 static
 int
 PERFWriteCounters( pal_perf_api_info * table )
 {
-    char * fileName = new char[MAX_LONGPATH];
+    PathCharString fileName;
     pal_perf_api_info * off;
     PERF_FILE * hFile;
     int i;
 
     off = table;
     
-    if (fileName == NULL)
-    {
-        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        return -1;
-    }
-    
-    PERFLogFileName(fileName, profile_summary_log_name, "_perf_summary.log", MAX_LONGPATH);
+    PERFLogFileName(&fileName, profile_summary_log_name, "_perf_summary.log", MAX_LONGPATH);
     hFile = PERF_FILEFN(fopen)(fileName, "a+");
     if(hFile != NULL)
     {   
@@ -744,7 +742,7 @@ PERFWriteCounters( pal_perf_api_info * table )
     if (pal_perf_histogram_size > 0)
     {
         off = table;
-        PERFLogFileName(fileName, profile_summary_log_name, "_perf_summary.hist", MAX_LONGPATH);
+        PERFLogFileName(&fileName, profile_summary_log_name, "_perf_summary.hist", MAX_LONGPATH);
         hFile = PERF_FILEFN(fopen)(fileName, "a+");
 
         if (hFile != NULL)
@@ -1090,20 +1088,14 @@ BOOL
 PERFFlushLog(pal_perf_thread_info * local_info, BOOL output_header)
 {
     BOOL ret = FALSE;
-    char * fileName = new char[MAX_LONGPATH];
+    PathCharString fileName;
     int nWrittenBytes = 0;
     PERF_FILE * hFile;
 
     if (summary_only)
         return TRUE;
-        
-    if (fileName == NULL)
-    {
-        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        return FALSE;
-    }
 
-    PERFLogFileName(fileName, profile_time_log_name, "_perf_time.log", MAX_LONGPATH);
+    PERFLogFileName(&fileName, profile_time_log_name, "_perf_time.log", MAX_LONGPATH);
 
     hFile = PERF_FILEFN(fopen)(fileName, "a+");
 
@@ -1126,6 +1118,10 @@ PERFFlushLog(pal_perf_thread_info * local_info, BOOL output_header)
         PERF_FILEFN(fclose)(hFile);
         ret = TRUE;
     }
+    
+    delete [] fileName;
+    fileName = NULL;
+
     return ret;
 }
 

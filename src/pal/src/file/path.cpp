@@ -197,6 +197,7 @@ GetFullPathNameW(
        large as MAX_LONGPATH WCHARs. */
     CHAR * bufferA;
     size_t bufferASize = 0;
+    PathCharString bufferAPS;
     LPSTR lpFilePartA;
     int   fileNameLength;
     int   srcSize;
@@ -248,14 +249,10 @@ GetFullPathNameW(
     }
     
     bufferASize = MAX_LONGPATH * sizeof(WCHAR);
-    bufferA = (CHAR *)alloca(bufferASize);
-    if (bufferA == NULL)
-    {
-        SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-        goto done;
-    }
+    bufferA = bufferAPS.OpenStringBuffer(bufferASize);
     
     length = GetFullPathNameA(fileNameA, bufferASize, bufferA, &lpFilePartA);
+    bufferAPS.CloseBuffer(length);
     
     if (length == 0 || length > bufferASize)
     {
@@ -1101,7 +1098,7 @@ SearchPathA(
     CHAR * FullPath;
     size_t FullPathLength = 0;
     PathCharString FullPathPS;
-    CHAR * CanonicalFullPath;
+    CHAR * CanonicalFullPath = new CHAR[MAX_LONGPATH];
     LPCSTR pPathStart;
     LPCSTR pPathEnd;
     size_t PathLength;
@@ -1137,7 +1134,6 @@ SearchPathA(
     }
 
     FileNameLength = strlen(lpFileName);
-    CanonicalFullPath = (CHAR *)alloca(MAX_LONGPATH);
     if (CanonicalFullPath == NULL)
     {
         SetLastError(ERROR_NOT_ENOUGH_MEMORY);
@@ -1298,6 +1294,12 @@ SearchPathA(
         }
     }
 done:
+    if (CanonicalFullPath != NULL)
+    {
+        delete [] CanonicalFullPath;
+        CanonicalFullPath = NULL;
+    }
+    
     LOGEXIT("SearchPathA returns DWORD %u\n", nRet);
     PERF_EXIT(SearchPathA);
     return nRet;
@@ -1340,7 +1342,7 @@ SearchPathW(
     PathCharString AnsiPathPS;
     size_t CanonicalPathLength;
     int canonical_size;
-    WCHAR * CanonicalPath;
+    WCHAR * CanonicalPath = new WCHAR[MAX_LONGPATH];
 
     PERF_ENTRY(SearchPathW);
     ENTRY("SearchPathW(lpPath=%p (%S), lpFileName=%p (%S), lpExtension=%p, "
@@ -1370,7 +1372,6 @@ SearchPathW(
         goto done;
     }          
 
-    CanonicalPath = (WCHAR *)alloca(MAX_LONGPATH);
     if (CanonicalPath == NULL)
     {
         SetLastError(ERROR_NOT_ENOUGH_MEMORY);
@@ -1468,7 +1469,7 @@ SearchPathW(
             }
     
             /* see if the file exists */
-            CanonicalPathLength = (PAL_wcslen(CanonicalPath)+1)*sizeof(WCHAR);
+            CanonicalPathLength = (PAL_wcslen(CanonicalPath)+1) * 3;
             AnsiPath = AnsiPathPS.OpenStringBuffer(CanonicalPathLength);
             canonical_size = WideCharToMultiByte(CP_ACP, 0, CanonicalPath, -1,
                                 AnsiPath, CanonicalPathLength, NULL, NULL);
@@ -1527,6 +1528,12 @@ SearchPathW(
         }
     }
 done:
+    if (CanonicalPath != NULL)
+    {
+        delete [] CanonicalPath;
+        CanonicalPath = NULL;   
+    }
+    
     LOGEXIT("SearchPathW returns DWORD %u\n", nRet);
     PERF_EXIT(SearchPathW);
     return nRet;

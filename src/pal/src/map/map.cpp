@@ -497,7 +497,7 @@ CorUnix::InternalCreateFileMapping(
         //
         
         /* Anonymous mapped files. */
-        if (strcpy_s(pImmutableData->szFileName, pImmutableData->cbszFileName, "/dev/zero") != SAFECRT_SUCCESS)
+        if (strcpy_s(pImmutableData->szFileName, sizeof(pImmutableData->szFileName), "/dev/zero") != SAFECRT_SUCCESS)
         {
             ERROR( "strcpy_s failed!\n" );
             palError = ERROR_INTERNAL_ERROR;
@@ -595,7 +595,7 @@ CorUnix::InternalCreateFileMapping(
                 goto ExitInternalCreateFileMapping;
             }
   
-            if (strcpy_s(pImmutableData->szFileName, pImmutableData->cbszFileName, pFileLocalData->unix_filename) != SAFECRT_SUCCESS)
+            if (strcpy_s(pImmutableData->szFileName, sizeof(pImmutableData->szFileName), pFileLocalData->unix_filename) != SAFECRT_SUCCESS)
             {
                 ERROR( "strcpy_s failed!\n" );
                 palError = ERROR_INTERNAL_ERROR;
